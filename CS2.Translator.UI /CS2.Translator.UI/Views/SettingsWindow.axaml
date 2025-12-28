@@ -1,0 +1,38 @@
+<Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CS2.Translator.UI.ViewModels"
+    x:Class="CS2.Translator.UI.Views.SettingsWindow"
+    Width="800"
+    Height="300"
+    Title="Settings"
+    CanResize="False"
+    x:DataType="vm:SettingsViewModel">
+
+    <Border Margin="12" Background="#252526" CornerRadius="8" Padding="12">
+        <StackPanel Spacing="10">
+
+            <TextBlock Text="CS2 Installation Path"/>
+            <TextBox Text="{Binding InstallationPath}"/>
+
+            <TextBlock Text="Language (e.g. en, de, ru)"/>
+            <TextBox Text="{Binding Language}"/>
+            
+            <TextBlock Text="Ignore Own Messages (Enter your name)"/>
+            <TextBox Text="{Binding PlayerName}" />
+
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8">
+                <Button Content="Cancel"
+                        Command="{Binding CancelCommand}" />
+
+                <Button Content="Save"
+                        Command="{Binding SaveCommand}" />
+
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+</Window>

@@ -1,0 +1,11 @@
+# IDE
+.idea/
+*.DotSettings.user
+
+# Build
+bin/
+obj/
+
+# OS
+.DS_Store
+Thumbs.db
