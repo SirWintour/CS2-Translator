@@ -1,12 +1,12 @@
-﻿using System.Collections.ObjectModel;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using CS2.Translator.Core.Models;
-using CS2.Translator.Core.Services;
-using CS2.Translator.Core.Exceptions;
-using System;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CS2.Translator.Core.Exceptions;
+using CS2.Translator.Core.Models;
+using CS2.Translator.Core.Services;
 
 namespace CS2.Translator.UI.ViewModels;
 
@@ -27,10 +27,8 @@ public partial class MainViewModel : ViewModelBase
         _logsService = logsService;
         _configService = configService;
         _logsService.ChatReceived += OnChatReceived;
-        
         _ = InitializeAsync();
     }
-
     private async Task InitializeAsync()
     {
         try
@@ -44,7 +42,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 Chats.Clear();
                 foreach (var chat in _logsService.Chats)
-                    Chats.Add(chat);
+                    Chats.Add(CloneForUi(chat));
             });
 
             StatusText = "Watching CS2 console.log";
@@ -53,19 +51,21 @@ public partial class MainViewModel : ViewModelBase
         {
             StatusText = "Waiting for CS2 (console.log not found)";
         }
+        catch (Exception ex)
+        {
+            StatusText = $"Error: {ex.Message}";
+        }
     }
-
-
-
+    
     private void OnChatReceived(Chat chat)
     {
+        var uiChat = CloneForUi(chat);
+
         Dispatcher.UIThread.Post(() =>
         {
-            Chats.Insert(0, chat);
+            Chats.Insert(0, uiChat);
         });
     }
-
-
     [RelayCommand]
     private void OpenSettings()
     {
@@ -75,17 +75,31 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task Reload()
     {
-        Dispatcher.UIThread.Post(() => Chats.Clear());
+        StatusText = "Reloading…";
+
+        Dispatcher.UIThread.Post(Chats.Clear);
 
         await _logsService.LoadLogsAsync(30);
 
         Dispatcher.UIThread.Post(() =>
         {
             foreach (var chat in _logsService.Chats)
-                Chats.Add(chat);
+                Chats.Add(CloneForUi(chat));
         });
+        StatusText = "Reloaded";
     }
-
+    private static Chat CloneForUi(Chat c)
+    {
+        return new Chat(
+            rawString: c.RawString,
+            chatType: c.ChatType,
+            name: c.Name,
+            message: c.Message
+        )
+        {
+            Translation = c.Translation
+        };
+    }
 
     public event Action? SettingsRequested;
 }

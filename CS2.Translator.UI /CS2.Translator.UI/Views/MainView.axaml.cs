@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia.Controls;
 using CS2.Translator.UI.ViewModels;
 
@@ -8,10 +9,24 @@ public partial class MainView : UserControl
     private MainView()
     {
         InitializeComponent();
+        Loaded += OnLoaded;
     }
-
     public MainView(MainViewModel vm) : this()
     {
         DataContext = vm;
+    }
+
+    private void OnLoaded(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.Chats.CollectionChanged += Chats_CollectionChanged;
+    }
+
+    private void Chats_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // Always scroll to the Top
+        ChatScrollViewer.ScrollToHome();
     }
 }
