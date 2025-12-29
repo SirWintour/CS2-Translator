@@ -9,6 +9,7 @@
 
     <PropertyGroup>
         <ApplicationManifest>app.manifest</ApplicationManifest>
+        <ApplicationIcon>Assets/cs2-translator.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
@@ -23,5 +24,9 @@
     <ItemGroup>
         <ProjectReference Include="..\..\CS2.Translator.Core\CS2.Translator.Core.csproj" />
         <ProjectReference Include="..\CS2.Translator.UI\CS2.Translator.UI.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <AvaloniaResource Include="Assets\cs2-translator.ico" />
     </ItemGroup>
 </Project>
