@@ -27,4 +27,5 @@
     <ItemGroup>
       <ProjectReference Include="..\..\CS2.Translator.Core\CS2.Translator.Core.csproj" />
     </ItemGroup>
+    
 </Project>

@@ -1,10 +1,15 @@
 # IDE
 .idea/
-*.DotSettings.user
+*.user
 
 # Build
-bin/
-obj/
+**/bin/
+**/obj/
+publish/
+AppDir/
+
+# AppImage
+*.AppImage
 
 # OS
 .DS_Store
