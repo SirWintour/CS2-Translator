@@ -1,6 +1,4 @@
-using System.Net.Http;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using CS2.Translator.Core.Exceptions;
 using CS2.Translator.Core.Models;
 using CS2.Translator.Core.Helper;
@@ -17,40 +15,23 @@ public sealed class TranslatorService(string targetLanguage)
         }
     };
 
-    private readonly WordTranslationCache _wordCache = new(targetLanguage);
+    private readonly string _targetLanguage = targetLanguage;
+    private readonly TranslationCache _cache = new(targetLanguage);
 
     public async Task<Translation> TranslateAsync(string sourceText, string targetLang)
     {
         if (string.IsNullOrWhiteSpace(sourceText))
             return new Translation(targetLang, string.Empty);
 
-        var words = Tokenize(sourceText);
-        var result = new List<string>();
+        if (_cache.TryGet(sourceText, out var cached))
+            return new Translation(targetLang, cached);
 
-        foreach (var word in words)
-        {
-            if (!IsTranslatable(word))
-            {
-                result.Add(word);
-                continue;
-            }
+        var translated = await TranslateRawAsync(sourceText, targetLang);
 
-            if (_wordCache.TryGet(word, out var cached))
-            {
-                result.Add(cached);
-                continue;
-            }
+        _cache.Set(sourceText, translated);
 
-            // translate single word
-            var translated = await TranslateRawAsync(word, targetLang);
-
-            _wordCache.Set(word, translated);
-            result.Add(translated);
-        }
-
-        return new Translation(targetLang, string.Join("", result));
+        return new Translation(targetLang, translated);
     }
-    
 
     private static async Task<string> TranslateRawAsync(string text, string lang)
     {
@@ -74,17 +55,5 @@ public sealed class TranslatorService(string targetLanguage)
         {
             throw new GoogleTranslateTimeoutException();
         }
-    }
-
-    private static List<string> Tokenize(string text)
-    {
-        return Regex.Matches(text, @"\w+|[^\w]+")
-            .Select(m => m.Value)
-            .ToList();
-    }
-
-    private static bool IsTranslatable(string token)
-    {
-        return Regex.IsMatch(token, @"^[\p{L}]+$");
     }
 }

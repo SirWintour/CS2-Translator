@@ -2,15 +2,15 @@ using System.Text.Json;
 
 namespace CS2.Translator.Core.Helper;
 
-public sealed class WordTranslationCache
+public sealed class TranslationCache
 {
-    private const int MaxEntries = 5000;
+    private const int MaxEntries = 3000;
 
     private readonly Dictionary<string, CacheEntry> _cache = new();
     private readonly string _filePath;
     private readonly object _lock = new();
 
-    public WordTranslationCache(string language)
+    public TranslationCache(string language)
     {
         var baseDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -23,33 +23,33 @@ public sealed class WordTranslationCache
         Load();
     }
 
-    public bool TryGet(string word, out string translation)
+    public bool TryGet(string sourceText, out string translation)
     {
         lock (_lock)
         {
-            var key = Normalize(word);
+            var key = Normalize(sourceText);
 
             if (_cache.TryGetValue(key, out var entry))
             {
                 entry.LastUsed = DateTime.UtcNow;
-                translation = entry.Value;
+                translation = entry.Translation;
                 return true;
             }
 
-            translation = "";
+            translation = string.Empty;
             return false;
         }
     }
 
-    public void Set(string word, string translation)
+    public void Set(string sourceText, string translation)
     {
         lock (_lock)
         {
-            var key = Normalize(word);
+            var key = Normalize(sourceText);
 
             _cache[key] = new CacheEntry
             {
-                Value = translation,
+                Translation = translation,
                 LastUsed = DateTime.UtcNow
             };
 
@@ -57,20 +57,19 @@ public sealed class WordTranslationCache
             Save();
         }
     }
-    
 
     private void EnforceLimit()
     {
         if (_cache.Count <= MaxEntries)
             return;
 
-        var toRemove = _cache
+        var removeKeys = _cache
             .OrderBy(kv => kv.Value.LastUsed)
             .Take(_cache.Count - MaxEntries)
             .Select(kv => kv.Key)
             .ToList();
 
-        foreach (var key in toRemove)
+        foreach (var key in removeKeys)
             _cache.Remove(key);
     }
 
@@ -85,6 +84,7 @@ public sealed class WordTranslationCache
             var data = JsonSerializer.Deserialize<Dictionary<string, CacheEntry>>(json);
             if (data == null) return;
 
+            _cache.Clear();
             foreach (var kv in data)
                 _cache[kv.Key] = kv.Value;
         }
@@ -105,12 +105,12 @@ public sealed class WordTranslationCache
         File.WriteAllText(_filePath, json);
     }
 
-    private static string Normalize(string s)
-        => s.Trim().ToLowerInvariant();
+    private static string Normalize(string text)
+        => text.Trim();
 
     private sealed class CacheEntry
     {
-        public string Value { get; set; } = "";
+        public string Translation { get; set; } = "";
         public DateTime LastUsed { get; set; }
     }
 }
