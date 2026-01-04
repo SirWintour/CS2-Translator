@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.ObjectModel;
+using Avalonia.Collections;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,7 +12,7 @@ namespace CS2.Translator.UI.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
-    public ObservableCollection<Chat> Chats { get; } = new();
+    public AvaloniaList<Chat> Chats { get; } = new();
 
     private readonly LogsService _logsService;
     private readonly ConfigService _configService;
@@ -37,8 +37,7 @@ public partial class MainViewModel : ViewModelBase
 
             await _logsService.LoadLogsAsync(30);
             _logsService.StartWatching();
-
-            Dispatcher.UIThread.Post(() =>
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 Chats.Clear();
                 foreach (var chat in _logsService.Chats)
@@ -57,13 +56,27 @@ public partial class MainViewModel : ViewModelBase
         }
     }
     
+    private bool _uiUpdateScheduled;
+    private readonly object _uiLock = new();
     private void OnChatReceived(Chat chat)
     {
-        var uiChat = CloneForUi(chat);
-
-        Dispatcher.UIThread.Post(() =>
+        lock (_uiLock)
         {
-            Chats.Insert(0, uiChat);
+            if (_uiUpdateScheduled)
+                return;
+
+            _uiUpdateScheduled = true;
+        }
+
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Chats.Clear();
+
+            foreach (var c in _logsService.Chats)
+                Chats.Add(c);
+
+            lock (_uiLock)
+                _uiUpdateScheduled = false;
         });
     }
     [RelayCommand]
