@@ -2,6 +2,7 @@ using System.Text.Json;
 using CS2.Translator.Core.Exceptions;
 using CS2.Translator.Core.Models;
 using CS2.Translator.Core.Helper;
+using System.Text;
 
 namespace CS2.Translator.Core.Services;
 
@@ -44,8 +45,16 @@ public sealed class TranslatorService(string targetLanguage)
             var json = await Http.GetStringAsync(url);
             var parsed = JsonSerializer.Deserialize<JsonElement>(json);
 
-            return parsed[0][0][0].GetString()
-                   ?? throw new TranslatorException("Empty response");
+            var parts = new List<string>();
+
+            foreach (var segment in parsed[0].EnumerateArray())
+            {
+                var part = segment[0].GetString();
+                if (!string.IsNullOrWhiteSpace(part))
+                    parts.Add(part);
+            }
+
+            return string.Concat(parts);
         }
         catch (HttpRequestException)
         {
