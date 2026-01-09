@@ -14,7 +14,7 @@ public sealed class TranslationCache
     {
         var baseDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "cs2-translator"
+            "CS2-Translator"
         );
 
         Directory.CreateDirectory(baseDir);
