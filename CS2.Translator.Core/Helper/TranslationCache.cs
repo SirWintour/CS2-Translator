@@ -1,5 +1,4 @@
 using System.Text.Json;
-
 namespace CS2.Translator.Core.Helper;
 
 public sealed class TranslationCache

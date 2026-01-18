@@ -1,6 +1,6 @@
 ﻿using System;
-using Avalonia.Collections;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,6 +12,7 @@ namespace CS2.Translator.UI.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
+    private const int MaxChats = 150;
     public AvaloniaList<Chat> Chats { get; } = new();
 
     private readonly LogsService _logsService;
@@ -37,12 +38,8 @@ public partial class MainViewModel : ViewModelBase
 
             await _logsService.LoadLogsAsync(30);
             _logsService.StartWatching();
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                Chats.Clear();
-                foreach (var chat in _logsService.Chats)
-                    Chats.Add(CloneForUi(chat));
-            });
+
+            await Dispatcher.UIThread.InvokeAsync(FullRefresh);
 
             StatusText = "Watching CS2 console.log";
         }
@@ -55,29 +52,30 @@ public partial class MainViewModel : ViewModelBase
             StatusText = $"Error: {ex.Message}";
         }
     }
-    
-    private bool _uiUpdateScheduled;
-    private readonly object _uiLock = new();
     private void OnChatReceived(Chat chat)
     {
-        lock (_uiLock)
+        Dispatcher.UIThread.Post(() =>
         {
-            if (_uiUpdateScheduled)
-                return;
-
-            _uiUpdateScheduled = true;
-        }
-
-        Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            Chats.Clear();
-
-            foreach (var c in _logsService.Chats)
-                Chats.Add(c);
-
-            lock (_uiLock)
-                _uiUpdateScheduled = false;
+            Chats.Insert(0, CloneForUi(chat));
+            EnforceLimit();
         });
+    }
+
+    private void FullRefresh()
+    {
+        Chats.Clear();
+
+        foreach (var chat in _logsService.Chats)
+        {
+            Chats.Add(CloneForUi(chat));
+            EnforceLimit();
+        }
+    }
+
+    private void EnforceLimit()
+    {
+        while (Chats.Count > MaxChats)
+            Chats.RemoveAt(0);
     }
     [RelayCommand]
     private void OpenSettings()
@@ -90,15 +88,10 @@ public partial class MainViewModel : ViewModelBase
     {
         StatusText = "Reloading…";
 
-        Dispatcher.UIThread.Post(Chats.Clear);
-
         await _logsService.LoadLogsAsync(30);
 
-        Dispatcher.UIThread.Post(() =>
-        {
-            foreach (var chat in _logsService.Chats)
-                Chats.Add(CloneForUi(chat));
-        });
+        Dispatcher.UIThread.Post(FullRefresh);
+
         StatusText = "Reloaded";
     }
     private static Chat CloneForUi(Chat c)

@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using CS2.Translator.UI.ViewModels;
 
 namespace CS2.Translator.UI.Views;
@@ -26,7 +27,9 @@ public partial class MainView : UserControl
 
     private void Chats_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // Always scroll to the Top
-        ChatScrollViewer.ScrollToHome();
+        Dispatcher.UIThread.Post(() =>
+        {
+            ChatScrollViewer.ScrollToHome();
+        }, DispatcherPriority.Background);
     }
 }

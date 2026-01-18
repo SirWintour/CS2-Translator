@@ -97,18 +97,37 @@ public sealed class LogsService
 
         _watcher = new FileSystemWatcher(dir, file)
         {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
+            NotifyFilter =
+                NotifyFilters.LastWrite |
+                NotifyFilters.Size |
+                NotifyFilters.FileName
         };
 
-        _watcher.Changed += async (_, __) =>
-        {
-            DebugLog("File change detected");
-            await DebouncedReload(loadAmount);
-        };
-
+        _watcher.Changed += OnLogFileChanged;
+        _watcher.Created += OnLogFileReset;
+        _watcher.Renamed += OnLogFileReset;
+        
         _watcher.EnableRaisingEvents = true;
         DebugLog("Watcher started");
     }
+    
+    private async void OnLogFileChanged(object? sender, FileSystemEventArgs e)
+    {
+        DebugLog("File changed");
+        await DebouncedReload(20);
+    }
+
+    private async void OnLogFileReset(object? sender, FileSystemEventArgs e)
+    {
+        DebugLog("Logfile recreated - RESET");
+
+        _lastFilePosition = 0;
+        _logs.Clear();
+        Chats.Clear();
+
+        await DebouncedReload(20);
+    }
+
 
     public void StopWatching()
     {
@@ -281,8 +300,11 @@ public sealed class LogsService
 
             if (fs.Length < _lastFilePosition)
             {
-                // log rotated or truncated
+                DebugLog("Logfile truncated - full reset");
+
                 _lastFilePosition = 0;
+                _logs.Clear();
+                Chats.Clear();
             }
 
             fs.Seek(_lastFilePosition, SeekOrigin.Begin);

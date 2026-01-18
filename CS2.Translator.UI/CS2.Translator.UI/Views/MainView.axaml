@@ -58,7 +58,7 @@
                                         Foreground="#AAAAAA"/>
 
                                     <TextBlock
-                                        Text="{Binding Translation.Text}"
+                                        Text="{Binding TranslationText}"
                                         TextWrapping="Wrap"
                                         Foreground="White"/>
                                 </StackPanel>
