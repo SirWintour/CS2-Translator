@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using CS2.Translator.Core.Enums;
 using CS2.Translator.Core.Exceptions;
 using CS2.Translator.Core.Models;
+using CS2.Translator.Core.Helper;
 
 namespace CS2.Translator.Core.Services;
 
@@ -23,13 +25,16 @@ public sealed class LogsService
     private CancellationTokenSource? _debounceCts;
     private long _lastFilePosition = 0;
     
-    // DEBUG
-    private static void DebugLog(string msg)
+    // measuring intervals
+    private readonly Stopwatch _uptime = Stopwatch.StartNew();
+
+    private static void DebugLog(string msg, string tag = "LogsService")
     {
-        Console.WriteLine($"[LogsService] {DateTime.Now:HH:mm:ss.fff} | {msg}");
+        string formatted = $"[{tag}] | {msg}";
+        Console.WriteLine(formatted);
+        DebugLogger.Log(formatted);
     }
     
-    // CTOR
     public LogsService(
         string cs2InstallationPath,
         TranslatorService translator,
@@ -40,50 +45,57 @@ public sealed class LogsService
         if (string.IsNullOrWhiteSpace(cs2InstallationPath))
             throw new ArgumentException("CS2 path is empty");
 
-        _logFilePath = Path.Combine(
-            cs2InstallationPath,
-            "game",
-            "csgo",
-            "console.log"
-        );
-
+        _logFilePath = Path.Combine(cs2InstallationPath, "game", "csgo", "console.log");
         _translator = translator;
         _targetLanguage = targetLanguage;
         _playerName = playerName?.Trim() ?? "";
         _autoTranslate = autoTranslate;
 
-        DebugLog("Initialized");
-        DebugLog($"Logfile path: {_logFilePath}");
-        DebugLog($"PlayerName: '{_playerName}'");
-        DebugLog($"AutoTranslate: {_autoTranslate}");
-        DebugLog($"TargetLanguage: {_targetLanguage}");
+        DebugLog("Initialized service");
+        DebugLog($"Log file path: {_logFilePath}");
+        DebugLog($"PlayerName='{_playerName}', AutoTranslate={_autoTranslate}, TargetLanguage='{_targetLanguage}'");
     }
     
     public async Task LoadLogsAsync(int amount)
     {
-        DebugLog($"LoadLogsAsync({amount})");
+        var sw = Stopwatch.StartNew();
+        DebugLog($"[LOAD] Starting LoadLogsAsync(amount={amount})...");
 
         var lines = await ReadNewLinesAsync();
-        DebugLog($"Read lines: {lines.Count}");
+        DebugLog($"[LOAD] Read {lines.Count} lines in {sw.ElapsedMilliseconds}ms");
 
         if (lines.Count == 0)
+        {
+            DebugLog("[LOAD] No new lines found");
             return;
+        }
 
         var parsed = ParseLines(lines);
-        DebugLog($"Parsed chats: {parsed.Count}");
+        DebugLog($"[PARSE] Parsed {parsed.Count} potential chat lines");
 
         var newLogs = GetNewLogs(parsed);
-        DebugLog($"New logs detected: {newLogs.Count}");
+        DebugLog($"[FILTER] Found {newLogs.Count} new chat entries");
 
         foreach (var log in newLogs)
-            await SaveLogAsync(log);
+        {
+            try
+            {
+                await SaveLogAsync(log);
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException(ex, "SaveLogAsync");
+            }
+        }
+
+        DebugLog($"[LOAD] Completed LoadLogsAsync in {sw.ElapsedMilliseconds}ms");
     }
 
     public void StartWatching(int loadAmount = 20)
     {
         if (_watcher != null)
         {
-            DebugLog("Watcher already running");
+            DebugLog("[WATCHER] Already running");
             return;
         }
 
@@ -92,15 +104,11 @@ public sealed class LogsService
 
         var dir = Path.GetDirectoryName(_logFilePath)!;
         var file = Path.GetFileName(_logFilePath);
-
-        DebugLog($"Watching {dir}/{file}");
+        DebugLog($"[WATCHER] Monitoring '{dir}/{file}'");
 
         _watcher = new FileSystemWatcher(dir, file)
         {
-            NotifyFilter =
-                NotifyFilters.LastWrite |
-                NotifyFilters.Size |
-                NotifyFilters.FileName
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName
         };
 
         _watcher.Changed += OnLogFileChanged;
@@ -108,18 +116,18 @@ public sealed class LogsService
         _watcher.Renamed += OnLogFileReset;
         
         _watcher.EnableRaisingEvents = true;
-        DebugLog("Watcher started");
+        DebugLog("[WATCHER] Started successfully");
     }
     
     private async void OnLogFileChanged(object? sender, FileSystemEventArgs e)
     {
-        DebugLog("File changed");
+        DebugLog($"[WATCHER] File changed event triggered - {e.ChangeType}");
         await DebouncedReload(20);
     }
 
     private async void OnLogFileReset(object? sender, FileSystemEventArgs e)
     {
-        DebugLog("Logfile recreated - RESET");
+        DebugLog($"[WATCHER] Logfile recreated or renamed ({e.ChangeType}) - resetting state");
 
         _lastFilePosition = 0;
         _logs.Clear();
@@ -128,21 +136,22 @@ public sealed class LogsService
         await DebouncedReload(20);
     }
 
-
     public void StopWatching()
     {
-        DebugLog("Stopping watcher");
+        DebugLog("[WATCHER] Stopping file watcher");
 
         _watcher?.Dispose();
         _watcher = null;
-
         _debounceCts?.Cancel();
         _debounceCts = null;
+
+        DebugLog("[WATCHER] Stopped successfully");
     }
+
     // Core
     private async Task SaveLogAsync(Log log)
     {
-        DebugLog($"SaveLog: {log.RawString}");
+        DebugLog($"[SAVE] Processing new log entry: {log.RawString}");
 
         _logs.AddLast(log);
 
@@ -150,38 +159,39 @@ public sealed class LogsService
             return;
 
         Chats.Insert(0, chat);
-        DebugLog($"Chat added: {chat.Name} -> {chat.Message}");
+        DebugLog($"[CHAT] Added new chat from '{chat.Name}' - {chat.Message}");
 
         if (_autoTranslate && !string.IsNullOrWhiteSpace(chat.Message))
         {
             if (!string.IsNullOrEmpty(_playerName) &&
                 chat.Name.Equals(_playerName, StringComparison.OrdinalIgnoreCase))
             {
-                DebugLog("Own message detected → skipping translation");
+                DebugLog("[TRANSLATE] Own message detected - skipping translation");
                 chat.Translation = new Translation(_targetLanguage, chat.Message);
             }
             else
             {
                 try
                 {
-                    DebugLog("Translating message...");
-                    chat.Translation =
-                        await _translator.TranslateAsync(
-                            chat.Message,
-                            _targetLanguage
-                        );
-                    DebugLog("Translation finished");
+                    DebugLog("[TRANSLATE] Translating message...");
+                    var sw = Stopwatch.StartNew();
+                    chat.Translation = await _translator.TranslateAsync(chat.Message, _targetLanguage);
+                    sw.Stop();
+                    DebugLog($"[TRANSLATE] Translation finished in {sw.ElapsedMilliseconds}ms - {chat.Translation?.Text}");
                 }
                 catch (TranslatorException ex)
                 {
-                    DebugLog($"Translation failed: {ex.Message}");
-                    chat.Translation =
-                        new Translation(_targetLanguage, $"[error] {ex.Message}");
+                    DebugLog($"[TRANSLATE] Translation failed: {ex.Message}");
+                    chat.Translation = new Translation(_targetLanguage, $"[error] {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException(ex, "Translator general failure");
                 }
             }
         }
 
-        DebugLog("Raising ChatReceived event");
+        DebugLog("[EVENT] Raising ChatReceived & ChatsUpdated");
         ChatReceived?.Invoke(chat);
         ChatsUpdated?.Invoke();
     }
@@ -194,12 +204,16 @@ public sealed class LogsService
         try
         {
             await Task.Delay(250, _debounceCts.Token);
-            DebugLog("Debounce passed");
+            DebugLog("[DEBOUNCE] Delay passed - reloading logs");
             await LoadLogsAsync(loadAmount);
         }
         catch (TaskCanceledException)
         {
-            DebugLog("Debounce canceled");
+            DebugLog("[DEBOUNCE] Canceled due to new event");
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "DebouncedReload");
         }
     }
     
@@ -207,7 +221,6 @@ public sealed class LogsService
     private static List<Chat> ParseLines(IEnumerable<string> lines)
     {
         var chats = new List<Chat>();
-
         foreach (var line in lines)
         {
             if (!Regex.IsMatch(line, @"\s\s\[\w+\]") && !line.Contains("﹫"))
@@ -220,12 +233,7 @@ public sealed class LogsService
             var namePart = split[0].Trim();
             var messagePart = split[1].Trim();
 
-            namePart = Regex.Replace(
-                namePart,
-                @"\d{1,2}/\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}",
-                ""
-            );
-
+            namePart = Regex.Replace(namePart, @"\d{1,2}/\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}", "");
             namePart = Regex.Replace(namePart, @"\[\w+\]", "");
             namePart = Regex.Replace(namePart, @"﹫\w+", "").Trim();
 
@@ -243,7 +251,6 @@ public sealed class LogsService
     private List<Log> GetNewLogs(List<Chat> parsed)
     {
         var result = new List<Log>();
-
         for (var i = parsed.Count - 1; i >= 0; i--)
         {
             if (_logs.Last == null)
@@ -264,7 +271,6 @@ public sealed class LogsService
     private static bool Compare(LinkedListNode<Log> last, Log current)
     {
         var node = last;
-
         if (node.Value.RawString != current.RawString)
             return false;
 
@@ -273,7 +279,6 @@ public sealed class LogsService
             node = node.Previous;
             if (node == null)
                 return true;
-
             if (node.Value.RawString != current.RawString)
                 return false;
         }
@@ -291,24 +296,16 @@ public sealed class LogsService
 
         await Task.Run(() =>
         {
-            using var fs = new FileStream(
-                _logFilePath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.ReadWrite
-            );
-
+            using var fs = new FileStream(_logFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (fs.Length < _lastFilePosition)
             {
-                DebugLog("Logfile truncated - full reset");
-
+                DebugLog("[FILE] Logfile truncated - resetting reader state");
                 _lastFilePosition = 0;
                 _logs.Clear();
                 Chats.Clear();
             }
 
             fs.Seek(_lastFilePosition, SeekOrigin.Begin);
-
             using var sr = new StreamReader(fs);
 
             while (sr.ReadLine() is { } line)
@@ -317,6 +314,7 @@ public sealed class LogsService
             _lastFilePosition = fs.Position;
         });
 
+        DebugLog($"[FILE] Read {result.Count} new lines (offset={_lastFilePosition})");
         return result;
     }
 }

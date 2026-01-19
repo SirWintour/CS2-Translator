@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using CS2.Translator.Core.Exceptions;
 using CS2.Translator.Core.Models;
 using CS2.Translator.Core.Services;
+using CS2.Translator.Core.Helper;
 
 namespace CS2.Translator.UI.ViewModels;
 
@@ -21,79 +22,158 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _statusText = "Idle";
 
+    public event Action? SettingsRequested;
+
     public MainViewModel(
         LogsService logsService,
         ConfigService configService)
     {
         _logsService = logsService;
         _configService = configService;
+
         _logsService.ChatReceived += OnChatReceived;
+
+        DebugLog("MainViewModel initialized");
         _ = InitializeAsync();
     }
+    
+    private static void DebugLog(string msg)
+    {
+        string formatted = $"[MainViewModel] | {msg}";
+        Console.WriteLine(formatted);
+        DebugLogger.Log(formatted);
+    }
+
     private async Task InitializeAsync()
     {
         try
         {
+            DebugLog("InitializeAsync started");
             StatusText = "Loading logs…";
 
             await _logsService.LoadLogsAsync(30);
+            DebugLog("Initial logs loaded");
+
             _logsService.StartWatching();
+            DebugLog("Log watcher started");
 
             await Dispatcher.UIThread.InvokeAsync(FullRefresh);
+            DebugLog("UI refresh completed after initialization");
 
             StatusText = "Watching CS2 console.log";
+            DebugLog("Status updated - Watching CS2 console.log");
         }
         catch (LogfileNotFoundException)
         {
             StatusText = "Waiting for CS2 (console.log not found)";
+            DebugLog("LogfileNotFoundException: console.log missing");
         }
         catch (Exception ex)
         {
             StatusText = $"Error: {ex.Message}";
+            DebugLogger.LogException(ex, "InitializeAsync");
         }
     }
+
     private void OnChatReceived(Chat chat)
     {
-        Dispatcher.UIThread.Post(() =>
+        try
         {
-            Chats.Insert(0, CloneForUi(chat));
-            EnforceLimit();
-        });
+            DebugLog($"Chat received from '{chat.Name}': {chat.Message}");
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    Chats.Insert(0, CloneForUi(chat));
+                    EnforceLimit();
+
+                    DebugLog($"Chat added to UI (Chats.Count={Chats.Count})");
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException(ex, "UIThread Chat Add");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "OnChatReceived");
+        }
     }
 
     private void FullRefresh()
     {
-        Chats.Clear();
-
-        foreach (var chat in _logsService.Chats)
+        try
         {
-            Chats.Add(CloneForUi(chat));
-            EnforceLimit();
+            DebugLog("FullRefresh() started");
+            
+            Chats.Clear();
+            foreach (var chat in _logsService.Chats)
+            {
+                Chats.Add(CloneForUi(chat));
+                EnforceLimit();
+            }
+
+            DebugLog($"FullRefresh() completed - total chats: {Chats.Count}");
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "FullRefresh");
         }
     }
 
     private void EnforceLimit()
     {
-        while (Chats.Count > MaxChats)
-            Chats.RemoveAt(0);
+        try
+        {
+            while (Chats.Count > MaxChats)
+                Chats.RemoveAt(0);
+
+            DebugLog($"EnforceLimit() applied (Chats.Count={Chats.Count})");
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "EnforceLimit");
+        }
     }
+
     [RelayCommand]
     private void OpenSettings()
     {
-        SettingsRequested?.Invoke();
+        try
+        {
+            DebugLog("OpenSettings() invoked");
+            SettingsRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "OpenSettings");
+        }
     }
 
     [RelayCommand]
     private async Task Reload()
     {
-        StatusText = "Reloading…";
+        try
+        {
+            DebugLog("Reload command triggered");
+            StatusText = "Reloading…";
+            
+            await _logsService.LoadLogsAsync(30);
+            DebugLog("Logs reloaded");
 
-        await _logsService.LoadLogsAsync(30);
-
-        Dispatcher.UIThread.Post(FullRefresh);
-
-        StatusText = "Reloaded";
+            await Dispatcher.UIThread.InvokeAsync(FullRefresh);
+            DebugLog("UI refreshed after reload");
+            StatusText = "Reloaded";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error during reload: {ex.Message}";
+            DebugLogger.LogException(ex, "Reload");
+        }
     }
+
     private static Chat CloneForUi(Chat c)
     {
         return new Chat(
@@ -106,6 +186,4 @@ public partial class MainViewModel : ViewModelBase
             Translation = c.Translation
         };
     }
-
-    public event Action? SettingsRequested;
 }

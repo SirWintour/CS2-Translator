@@ -1,6 +1,8 @@
+using System;
 using Avalonia.Controls;
 using CS2.Translator.Core.Services;
 using CS2.Translator.UI.ViewModels;
+using CS2.Translator.Core.Helper;
 
 namespace CS2.Translator.UI.Views;
 
@@ -11,39 +13,66 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        InitializeComponent();
-        
-        _configService = new ConfigService();
-        _configService.Load();
-        
-        var translatorService = new TranslatorService(
-            _configService.Config.Language
-        );
+        try
+        {
+            InitializeComponent();
+            DebugLog("MainWindow constructor started");
 
+            _configService = new ConfigService();
+            DebugLog("Created ConfigService instance");
 
-        _logsService = new LogsService(
-            _configService.Config.InstallationPath,
-            translatorService,
-            _configService.Config.Language,
-            _configService.Config.PlayerName
-        );
-        
-        var mainVm = new MainViewModel(
-            _logsService,
-            _configService
-        );
+            _configService.Load();
+            DebugLog("Configuration loaded successfully");
+            DebugLog($"Config: Language='{_configService.Config.Language}', Player='{_configService.Config.PlayerName}', Path='{_configService.Config.InstallationPath}'");
 
-        mainVm.SettingsRequested += OpenSettings;
-        
-        Content = new MainView(mainVm);
+            var translatorService = new TranslatorService(_configService.Config.Language);
+            DebugLog($"Created TranslatorService (TargetLanguage='{_configService.Config.Language}')");
+
+            _logsService = new LogsService(
+                _configService.Config.InstallationPath,
+                translatorService,
+                _configService.Config.Language,
+                _configService.Config.PlayerName
+            );
+            DebugLog("LogsService created successfully");
+
+            var mainVm = new MainViewModel(_logsService, _configService);
+            mainVm.SettingsRequested += OpenSettings;
+            DebugLog("MainViewModel created and SettingsRequested event bound");
+            Content = new MainView(mainVm);
+            DebugLog("MainView created and assigned to window content");
+
+            DebugLog("MainWindow fully initialized");
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "MainWindow Constructor");
+            Console.WriteLine($"[MainWindow] Initialization failed: {ex.Message}");
+        }
+    }
+
+    private static void DebugLog(string msg)
+    {
+        string formatted = $"[MainWindow] | {msg}";
+        Console.WriteLine(formatted);
+        DebugLogger.Log(formatted);
     }
 
     private void OpenSettings()
     {
-        var vm = new SettingsViewModel(_configService);
+        try
+        {
+            DebugLog("OpenSettings() invoked → opening SettingsWindow");
 
-        var win = new SettingsWindow(vm);
+            var vm = new SettingsViewModel(_configService);
+            var win = new SettingsWindow(vm);
 
-        win.ShowDialog(this);
+            win.ShowDialog(this);
+            DebugLog("SettingsWindow opened successfully");
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "OpenSettings");
+        }
     }
 }
