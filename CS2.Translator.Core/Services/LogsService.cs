@@ -22,16 +22,17 @@ public sealed class LogsService
     private readonly bool _autoTranslate;
 
     private FileSystemWatcher? _watcher;
+    private Timer? _pollTimer;
     private CancellationTokenSource? _debounceCts;
     private long _lastFilePosition = 0;
+    private DateTime _lastWriteTimeUtc = DateTime.MinValue;
     
-    // measuring intervals
-    private readonly Stopwatch _uptime = Stopwatch.StartNew();
+    // measuring intervals 
+    private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(1);
 
     private static void DebugLog(string msg, string tag = "LogsService")
     {
-        string formatted = $"[{tag}] | {msg}";
-        Console.WriteLine(formatted);
+        string formatted = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{tag}] | {msg}";
         DebugLogger.Log(formatted);
     }
     
@@ -114,9 +115,13 @@ public sealed class LogsService
         _watcher.Changed += OnLogFileChanged;
         _watcher.Created += OnLogFileReset;
         _watcher.Renamed += OnLogFileReset;
-        
+        _watcher.Deleted += OnLogFileReset;
         _watcher.EnableRaisingEvents = true;
-        DebugLog("[WATCHER] Started successfully");
+
+        _pollTimer = new Timer(async _ => await PollLogFileAsync(), null,
+            _pollInterval, _pollInterval);
+
+        DebugLog($"[WATCHER] Started successfully with polling every {_pollInterval.TotalSeconds}s");
     }
     
     private async void OnLogFileChanged(object? sender, FileSystemEventArgs e)
@@ -130,6 +135,7 @@ public sealed class LogsService
         DebugLog($"[WATCHER] Logfile recreated or renamed ({e.ChangeType}) - resetting state");
 
         _lastFilePosition = 0;
+        _lastWriteTimeUtc = DateTime.MinValue;
         _logs.Clear();
         Chats.Clear();
 
@@ -141,11 +147,45 @@ public sealed class LogsService
         DebugLog("[WATCHER] Stopping file watcher");
 
         _watcher?.Dispose();
+        _pollTimer?.Dispose();
         _watcher = null;
+        _pollTimer = null;
         _debounceCts?.Cancel();
         _debounceCts = null;
 
         DebugLog("[WATCHER] Stopped successfully");
+    }
+
+    private async Task PollLogFileAsync()
+    {
+        try
+        {
+            if (!File.Exists(_logFilePath))
+                return;
+
+            var info = new FileInfo(_logFilePath);
+
+            if (info.Length < _lastFilePosition)
+            {
+                DebugLog($"[POLL] Detected file truncation - resetting position");
+                _lastFilePosition = 0;
+                _lastWriteTimeUtc = DateTime.MinValue;
+                _logs.Clear();
+                Chats.Clear();
+                await DebouncedReload(20);
+                return;
+            }
+
+            if (info.Length > _lastFilePosition || info.LastWriteTimeUtc != _lastWriteTimeUtc)
+            {
+                DebugLog("[POLL] Detected potential update - reloading");
+                await DebouncedReload(10);
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "PollLogFileAsync");
+        }
     }
 
     // Core
@@ -230,19 +270,12 @@ public sealed class LogsService
             if (split.Length < 2)
                 continue;
 
-            var namePart = split[0].Trim();
-            var messagePart = split[1].Trim();
-
-            namePart = Regex.Replace(namePart, @"\d{1,2}/\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}", "");
+            var namePart = Regex.Replace(split[0], @"\d{1,2}/\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}", "");
             namePart = Regex.Replace(namePart, @"\[\w+\]", "");
             namePart = Regex.Replace(namePart, @"﹫\w+", "").Trim();
+            var messagePart = split[1].Trim();
 
-            chats.Add(new Chat(
-                rawString: line,
-                chatType: ChatType.All,
-                name: namePart,
-                message: messagePart
-            ));
+            chats.Add(new Chat(line, ChatType.All, namePart, messagePart));
         }
 
         return chats;
@@ -290,7 +323,6 @@ public sealed class LogsService
     private async Task<List<string>> ReadNewLinesAsync()
     {
         var result = new List<string>();
-
         if (!File.Exists(_logFilePath))
             throw new LogfileNotFoundException();
 
@@ -299,8 +331,9 @@ public sealed class LogsService
             using var fs = new FileStream(_logFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (fs.Length < _lastFilePosition)
             {
-                DebugLog("[FILE] Logfile truncated - resetting reader state");
+                DebugLog("[FILE] Truncated - resetting offset");
                 _lastFilePosition = 0;
+                _lastWriteTimeUtc = DateTime.MinValue;
                 _logs.Clear();
                 Chats.Clear();
             }
@@ -312,6 +345,7 @@ public sealed class LogsService
                 result.Add(line);
 
             _lastFilePosition = fs.Position;
+            _lastWriteTimeUtc = File.GetLastWriteTimeUtc(_logFilePath);
         });
 
         DebugLog($"[FILE] Read {result.Count} new lines (offset={_lastFilePosition})");
