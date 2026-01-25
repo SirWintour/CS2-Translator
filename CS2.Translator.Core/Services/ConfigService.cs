@@ -9,6 +9,8 @@ public class ConfigService
 
     private readonly string _configPath = GetConfigPath();
 
+    public event Action? ConfigChanged;
+
     public void Load()
     {
         if (!File.Exists(_configPath))
@@ -30,6 +32,7 @@ public class ConfigService
         }
 
         Config.Validate();
+        ConfigChanged?.Invoke();
     }
 
     public void Save()
@@ -48,6 +51,8 @@ public class ConfigService
             });
 
         File.WriteAllText(_configPath, json);
+
+        ConfigChanged?.Invoke();
     }
 
     private static string GetConfigPath()

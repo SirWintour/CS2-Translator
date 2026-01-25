@@ -5,6 +5,8 @@ public class AppConfig
     public string InstallationPath { get; set; } = "";
     public string Language { get; set; } = "en";
     public string PlayerName { get; set; } = "";
+    public double NameFontSize { get; set; } = 14;
+    public double TranslationFontSize { get; set; } = 12;
 
     public void Validate()
     {

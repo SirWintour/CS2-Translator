@@ -24,6 +24,9 @@ public partial class MainViewModel : ViewModelBase
 
     public event Action? SettingsRequested;
 
+    public double NameFontSize => _configService.Config.NameFontSize;
+    public double TranslationFontSize => _configService.Config.TranslationFontSize;
+
     public MainViewModel(
         LogsService logsService,
         ConfigService configService)
@@ -32,6 +35,8 @@ public partial class MainViewModel : ViewModelBase
         _configService = configService;
 
         _logsService.ChatReceived += OnChatReceived;
+        
+        _configService.ConfigChanged += OnConfigChanged;
 
         DebugLog("MainViewModel initialized");
         _ = InitializeAsync();
@@ -42,6 +47,23 @@ public partial class MainViewModel : ViewModelBase
         string formatted = $"[MainViewModel] | {msg}";
         Console.WriteLine(formatted);
         DebugLogger.Log(formatted);
+    }
+
+    private void OnConfigChanged()
+    {
+        try
+        {
+            DebugLog("ConfigChanged event received");
+
+            OnPropertyChanged(nameof(NameFontSize));
+            OnPropertyChanged(nameof(TranslationFontSize));
+
+            DebugLog("Font size properties updated");
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "OnConfigChanged");
+        }
     }
 
     private async Task InitializeAsync()

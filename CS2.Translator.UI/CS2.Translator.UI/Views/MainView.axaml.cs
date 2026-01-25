@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CS2.Translator.UI.ViewModels;
@@ -40,11 +41,42 @@ public partial class MainView : UserControl
             }
 
             vm.Chats.CollectionChanged += Chats_CollectionChanged;
+            vm.PropertyChanged += Vm_PropertyChanged;
             DebugLog("Subscribed to Chats.CollectionChanged event");
         }
         catch (Exception ex)
         {
             DebugLogger.LogException(ex, "OnLoaded");
+        }
+    }
+
+    private void Vm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        try
+        {
+            if (e.PropertyName == nameof(MainViewModel.NameFontSize) ||
+                e.PropertyName == nameof(MainViewModel.TranslationFontSize))
+            {
+                DebugLog($"Font size changed → {e.PropertyName}");
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        // force UI refresh
+                        InvalidateVisual();
+                        DebugLog("UI invalidated due to font size change");
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.LogException(ex, "InvalidateVisual");
+                    }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException(ex, "Vm_PropertyChanged");
         }
     }
 

@@ -18,6 +18,12 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private string _playerName;
     
+    [ObservableProperty]
+    private double _nameFontSize;
+
+    [ObservableProperty]
+    private double _translationFontSize;
+
     public SettingsViewModel(ConfigService configService)
     {
         _configService = configService;
@@ -25,6 +31,14 @@ public partial class SettingsViewModel : ViewModelBase
         InstallationPath = _configService.Config.InstallationPath;
         Language = _configService.Config.Language;
         PlayerName = _configService.Config.PlayerName;
+        
+        NameFontSize = _configService.Config.NameFontSize <= 0
+            ? 14
+            : _configService.Config.NameFontSize;
+
+        TranslationFontSize = _configService.Config.TranslationFontSize <= 0
+            ? 12
+            : _configService.Config.TranslationFontSize;
     }
 
     public event Action? CloseRequested;
@@ -35,6 +49,9 @@ public partial class SettingsViewModel : ViewModelBase
         _configService.Config.InstallationPath = InstallationPath;
         _configService.Config.Language = Language;
         _configService.Config.PlayerName = PlayerName;
+
+        _configService.Config.NameFontSize = NameFontSize;
+        _configService.Config.TranslationFontSize = TranslationFontSize;
 
         _configService.Save();
 

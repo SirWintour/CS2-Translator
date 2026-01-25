@@ -4,7 +4,7 @@
     xmlns:vm="using:CS2.Translator.UI.ViewModels"
     x:Class="CS2.Translator.UI.Views.SettingsWindow"
     Width="800"
-    Height="300"
+    Height="480"
     Title="Settings"
     CanResize="False"
     x:DataType="vm:SettingsViewModel">
@@ -20,7 +20,20 @@
             
             <TextBlock Text="Ignore Own Messages (Enter your name)"/>
             <TextBox Text="{Binding PlayerName}" />
+            
+            <TextBlock Text="Player Name Font Size"/>
+            <Slider Minimum="8"
+                    Maximum="32"
+                    Value="{Binding NameFontSize}"
+                    TickFrequency="1"
+                    IsSnapToTickEnabled="True"/>
 
+            <TextBlock Text="Translation Font Size"/>
+            <Slider Minimum="8"
+                    Maximum="32"
+                    Value="{Binding TranslationFontSize}"
+                    TickFrequency="1"
+                    IsSnapToTickEnabled="True"/>
 
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Right"
