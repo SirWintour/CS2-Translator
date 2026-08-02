@@ -202,7 +202,8 @@ public partial class MainViewModel : ViewModelBase
             rawString: c.RawString,
             chatType: c.ChatType,
             name: c.Name,
-            message: c.Message
+            message: c.Message,
+            location: c.Location
         )
         {
             Translation = c.Translation

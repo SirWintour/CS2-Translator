@@ -52,14 +52,27 @@
                                 HorizontalAlignment="Left">
 
                                 <StackPanel Spacing="4">
-                                    <TextBlock
-                                        Text="{Binding Name}"
-                                        FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        Foreground="#AAAAAA"/>
+									<StackPanel Orientation="Horizontal" Spacing="4">
+									    <TextBlock
+                                            Text="{Binding ChatType, StringFormat='[{0}]'}"
+                                            FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Foreground="#AAAAAA"/>
+                                        <TextBlock
+                                            Text="{Binding Name}"
+                                            FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            FontFamily="'Noto Sans'"
+                                            Foreground="#AAAAAA"/>
+									    <TextBlock
+                                            Text="{Binding Location, StringFormat='@ {0}'}"
+                                            FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Foreground="#00FF00"
+											IsVisible="{Binding HasLocation}"/>
+									</StackPanel>
 
-                                    <TextBlock
+									<SelectableTextBlock
                                         Text="{Binding TranslationText}"
                                         FontSize="{Binding DataContext.TranslationFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        FontFamily="'Cambria Math', 'Segoe UI Symbol', 'Segoe UI Emoji', 'Segoe UI', 'Arial Unicode MS'"
                                         TextWrapping="Wrap"
                                         Foreground="White"/>
                                 </StackPanel>
