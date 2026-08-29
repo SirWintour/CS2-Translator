@@ -274,7 +274,8 @@ public sealed class LogsService
             Match m = Regex.Match(namePart, @"\[(\w+)\]");
             ChatType chatType = ChatType.All;
             if (m.Success && m.Groups.Count > 1)
-                Enum.TryParse<ChatType>(m.Groups[1].Value, out chatType);
+                if (!Enum.TryParse<ChatType>(m.Groups[1].Value, true, out chatType))
+                    continue;
 
             namePart = Regex.Replace(namePart, @"\[\w+\]", "");
             Match m2 = new Regex(@"﹫(.*)", RegexOptions.IgnoreCase).Match(namePart);
